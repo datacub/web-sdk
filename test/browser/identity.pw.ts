@@ -216,6 +216,68 @@ test.describe('identify and reset', () => {
     expect(other).not.toMatch(/example\.sa|0551234567|سارة/)
   })
 
+  test('identify({ id, ... }): id aliases, field aliases, nested metadata, repeated updates', async ({
+    page,
+  }) => {
+    const run = newRun()
+    await start(page, run)
+    await page.evaluate(() => {
+      window.datacub.identify({
+        id: 'user_o',
+        email: 'nora@example.sa',
+        fullName: 'نورة',
+        phoneNumber: '+966 55 123 4567',
+        plan: 'starter',
+        premium: true,
+        seats: 3,
+        signupDate: new Date('2026-11-01T09:00:00Z'),
+        company: { name: 'Darb', size: 40, address: { city: 'Riyadh' } },
+        roles: ['admin', 'billing'],
+      })
+      // the same user by another id key: an update, kept on the same person
+      window.datacub.identify({ userId: 'user_o', plan: 'pro' })
+      window.datacub.identify({ user_id: 'user_o', role: 'owner' })
+      window.datacub.track('after_object_identify')
+    })
+    await flush(page)
+    const all = await waitFor(page, run, 1, 'after_object_identify')
+    const ids = all.filter((e) => e.event === '$identify')
+    expect(ids).toHaveLength(1)
+    expect(ids[0]?.user_id).toBe('user_o')
+    expect(ids[0]?.properties).toMatchObject({
+      $email: 'nora@example.sa',
+      $name: 'نورة',
+      $phone: '+966 55 123 4567',
+      plan: 'starter',
+      premium: true,
+      seats: 3,
+      signupDate: '2026-11-01T09:00:00.000Z',
+      company: { name: 'Darb', size: 40, address: { city: 'Riyadh' } },
+      roles: ['admin', 'billing'],
+    })
+    // the id and the alias keys never stay as traits
+    for (const k of ['id', 'fullName', 'phoneNumber']) expect(ids[0]?.properties[k]).toBeUndefined()
+    const sets = all.filter((e) => e.event === '$set')
+    expect(sets.map((e) => [e.user_id, e.properties])).toEqual([
+      ['user_o', { plan: 'pro' }],
+      ['user_o', { role: 'owner' }],
+    ])
+    expect(all.at(-1)?.user_id).toBe('user_o')
+  })
+
+  test('identify({}) without an id is refused and sends nothing', async ({ page }) => {
+    const run = newRun()
+    await start(page, run)
+    await page.evaluate(() => {
+      window.datacub.identify({ email: 'no-id@example.sa' } as never)
+      window.datacub.track('after_bad_identify')
+    })
+    await flush(page)
+    const all = await waitFor(page, run, 1, 'after_bad_identify')
+    expect(all.some((e) => e.event === '$identify' || e.event === '$set')).toBe(false)
+    expect(JSON.stringify(all)).not.toContain('no-id@example.sa')
+  })
+
   test('traits on a different user are a new person: reset first, never merged', async ({
     page,
   }) => {
@@ -271,7 +333,9 @@ test.describe('identify and reset', () => {
     await start(other, run)
     // Cookie writes reach another tab's process a moment later in WebKit; wait until they are visible.
     const sees = (on: boolean) =>
-      expect.poll(() => other.evaluate(() => document.cookie.includes('datacub_u='))).toBe(on)
+      expect
+        .poll(() => other.evaluate(() => document.cookie.includes('datacub_u_abcdefgh=')))
+        .toBe(on)
     await page.evaluate(() => window.datacub.identify('user_42'))
     await sees(true)
     await other.evaluate(() => window.datacub.track('other_tab_after_login'))

@@ -85,6 +85,8 @@ Pass times as `Date` objects, not millisecond numbers, which would be redacted.
 // after login
 datacub.identify('user_8412', { account: 'acct_77', email: 'sara@example.sa', name: 'Sara' })
 
+// or with the id inside: datacub.identify({ id: 'user_8412', email: 'sara@example.sa', plan: 'pro' })
+
 // at logout, so the next person on this browser starts fresh
 datacub.reset()
 ```
@@ -146,7 +148,7 @@ Add `data-datacub-no-capture` (or the class `datacub-no-capture`) to any element
 |---|---|
 | `datacub.init(publicKey, options?)` | Starts the SDK. Runs once; later calls are ignored |
 | `datacub.track(event, properties?)` | Records a custom event |
-| `datacub.identify(userId, traits?)` | Links this browser to a signed-in user; traits `account`, `email`, `name`, `phone` and custom properties |
+| `datacub.identify(userId, traits?)` or `datacub.identify({ id, ...traits })` | Links this browser to a signed-in user (the id may also be `userId` or `user_id`; `fullName` and `phoneNumber` count as `name` and `phone`); traits `account`, `email`, `name`, `phone` and custom properties |
 | `datacub.reset()` | At logout: a new anonymous ID and session |
 | `datacub.consent.grant(options?)` | Records consent (`method`, `policyVersion`, `overrideGPC`) and starts tracking when the project asks for consent |
 | `datacub.consent.revoke()` | Stops tracking, deletes stored IDs and queued events, and remembers the choice |
@@ -189,6 +191,8 @@ Automatically, after `init` (and after `grant` when the project asks for consent
 ### Cookies
 
 The SDK keeps its state in first-party cookies on your site's registrable domain (so `www.example.sa` and `app.example.sa` share one visitor). It uses no `localStorage`; when the browser refuses cookies it keeps the IDs in memory for the current page only.
+
+Cookie names end with `_` and eight characters of your project key (for example `datacub_id_abcdefgh`), so two project keys on one site never share a visitor. `datacub_optout` has no suffix and applies to every key on the site.
 
 | Cookie | Contents | Lifetime |
 |---|---|---|

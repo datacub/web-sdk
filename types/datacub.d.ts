@@ -67,6 +67,12 @@ export interface DatacubClient {
     init(publicKey: string, options?: InitOptions): void;
     track(event: string, properties?: Properties): void;
     identify(userId: string | number, options?: IdentifyOptions): void;
+    /** The same with the id inside: identify({ id: 'u_42', email, plan: 'pro' }). */
+    identify(profile: IdentifyOptions & {
+        id?: string | number;
+        userId?: string | number;
+        user_id?: string | number;
+    }): void;
     reset(): void;
     consent: {
         grant(options?: GrantOptions): void;

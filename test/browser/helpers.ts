@@ -92,6 +92,13 @@ export async function waitFor(page: Page, run: string, count: number, name?: str
   return events(page, run)
 }
 
+// Identity cookies end with eight characters of the key (FD-65); read here under their base names.
+export const SUFFIX = `_${KEY.slice(8, 16)}`
 export async function cookies(page: Page) {
-  return Object.fromEntries((await page.context().cookies()).map((c) => [c.name, c.value]))
+  return Object.fromEntries(
+    (await page.context().cookies()).map((c) => [
+      c.name.endsWith(SUFFIX) ? c.name.slice(0, -SUFFIX.length) : c.name,
+      c.value,
+    ]),
+  )
 }

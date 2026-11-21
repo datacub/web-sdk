@@ -448,10 +448,10 @@ test('identity.reject_pii_ids: emails, phones, IDs, cards, JWTs and sentinels ar
   const run = newRun()
   await begin(page, run)
   const accepted = await page.evaluate(() => {
-    const anon = document.cookie.match(/datacub_id=([^;]*)/)?.[1]
-    const ss = decodeURIComponent(document.cookie.match(/datacub_ss=([^;]*)/)?.[1] ?? '').split(
-      '.',
-    )[0]
+    const anon = document.cookie.match(/datacub_id_abcdefgh=([^;]*)/)?.[1]
+    const ss = decodeURIComponent(
+      document.cookie.match(/datacub_ss_abcdefgh=([^;]*)/)?.[1] ?? '',
+    ).split('.')[0]
     const refused: unknown[] = [
       'ahmed@example.com',
       ' Ahmed@Example.com ',
@@ -519,7 +519,7 @@ test('identity.reject_pii_ids: emails, phones, IDs, cards, JWTs and sentinels ar
     for (const v of refused) {
       window.datacub.identify(v as string)
       if (v != null) window.datacub.identify('acct_ok_user', { account: v as string })
-      if (/datacub_u=/.test(document.cookie)) {
+      if (/datacub_u_abcdefgh=/.test(document.cookie)) {
         out.push(v)
         window.datacub.reset()
       }
@@ -550,7 +550,7 @@ test('identity.reject_pii_ids: IDs hidden with separators are refused', async ({
     const out: string[] = []
     for (const v of ['1ـ012345678', '101/234/5678', '1​012345678', '055–1234567']) {
       window.datacub.identify(v)
-      if (/datacub_u=/.test(document.cookie)) {
+      if (/datacub_u_abcdefgh=/.test(document.cookie)) {
         out.push(v)
         window.datacub.reset()
       }

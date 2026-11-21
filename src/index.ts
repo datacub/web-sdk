@@ -97,6 +97,14 @@ export interface DatacubClient {
   init(publicKey: string, options?: InitOptions): void
   track(event: string, properties?: Properties): void
   identify(userId: string | number, options?: IdentifyOptions): void
+  /** The same with the id inside: identify({ id: 'u_42', email, plan: 'pro' }). */
+  identify(
+    profile: IdentifyOptions & {
+      id?: string | number
+      userId?: string | number
+      user_id?: string | number
+    },
+  ): void
   reset(): void
   consent: { grant(options?: GrantOptions): void; revoke(): void }
   /** Added by the feedback widget (start() from @datacub/web/feedback, or /v1/feedback.js): show one question now. */
@@ -165,6 +173,9 @@ let release: string | null = null
 let state: 'pending' | 'granted' | 'not_required' | 'denied' = 'pending'
 let gpc = false
 let cookies = false
+// Cookie names carry part of the project key (FD-65): one key shares one visitor and session across
+// every subdomain of its site; another key on the same site gets its own, never the same anon_id.
+let ns = ''
 let domain = ''
 let anon = ''
 let user: string | null = null
@@ -239,7 +250,10 @@ function jar(): Record<string, string> {
   try {
     for (const c of d.cookie.split('; ')) {
       const i = c.indexOf('=')
-      if (c.startsWith('datacub_')) o[c.slice(0, i)] = decodeURIComponent(c.slice(i + 1))
+      const n = c.slice(0, i)
+      // the opt-out is shared by every key on the site, as the more protective reading
+      if (n === 'datacub_optout' || (ns && n.endsWith(ns)))
+        o[n === 'datacub_optout' ? n : n.slice(0, -ns.length)] = decodeURIComponent(c.slice(i + 1))
     }
   } catch {}
   return o
@@ -247,7 +261,7 @@ function jar(): Record<string, string> {
 
 function setCookie(name: string, value: string | null, dom = domain, age = value ? YEAR : 0) {
   try {
-    d.cookie = `${name}=${encodeURIComponent(value || '')};Path=/;Max-Age=${age};SameSite=Lax${dom}${location.protocol === 'https:' ? ';Secure' : ''}`
+    d.cookie = `${name === 'datacub_optout' ? name : name + ns}=${encodeURIComponent(value || '')};Path=/;Max-Age=${age};SameSite=Lax${dom}${location.protocol === 'https:' ? ';Secure' : ''}`
   } catch {}
 }
 
@@ -1010,19 +1024,28 @@ function setUser(id: string, acct: string | null, t: Ev) {
 
 // email, name and phone are what the customer's code passes on purpose: sent as given,
 // normalised and checked on the server, never an identity key. Other traits get track()'s floor.
+// identify(id, traits) or identify({ id, ...traits }), the id also as userId or user_id. Every other
+// key is a trait on the person's profile; fullName and phoneNumber count as name and phone.
 function identify(userId: unknown, o?: IdentifyOptions) {
+  if (userId && typeof userId === 'object') {
+    o = userId as IdentifyOptions
+    userId = o.id ?? o.userId ?? o.user_id
+  }
   const own = [anon, sid, pageId]
   const id = validId(userId, own)
   const acct = o?.account == null ? null : validId(o.account, own)
   if (!id || (o?.account != null && !acct)) return warn('bad id')
   const t = ((o && clean(o)) || {}) as Ev
-  delete t.account
-  // the floor redacted these three in t; the raw values go under their own keys instead
-  for (const k of ['email', 'name', 'phone'])
-    if (k in t) {
-      t[`$${k}`] = (o as Ev)[k]
+  // the ids are not traits; the floor redacted email, name and phone (also fullName, phone_number)
+  // in t, so their raw values go under $email, $name and $phone instead
+  for (const k in t) {
+    const m = /^(?:account|id|user_?id|(email)|(?:full_?)?(name)|(phone)(?:_?number)?)$/i.exec(k)
+    if (m) {
+      const n = m[1] || m[2] || m[3]
+      if (n) t[`$${n.toLowerCase()}`] = (o as Ev)[k]
       delete t[k]
     }
+  }
   if (anon) setUser(id, acct, t)
   else if (state === 'pending') pendingUser = [id, acct, t]
 }
@@ -1070,6 +1093,7 @@ function start(publicKey: unknown, o: InitOptions = {}) {
     return warn('init: bad apiHost')
   started = true
   key = publicKey
+  ns = `_${publicKey.slice(8, 16)}`
   endpoint = `${u.origin}${u.pathname.replace(/\/+$/, '')}/v1/batch`
   hashRouting = o.hashRouting === true
   // developer config, not user data: a git SHA or deployment ID must not be scrubbed
