@@ -93,7 +93,8 @@ test('default: a revoke survives a page load, and a grant clears it', async ({ p
   await start(page, run, init)
   await waitFor(page, run, 1, '$pageview')
   await page.evaluate(() => window.datacub.consent.revoke())
-  expect((await cookies(page)).datacub_optout).toBe('1')
+  // WebKit writes document.cookie to the cookie store asynchronously: wait for it
+  await expect.poll(async () => (await cookies(page)).datacub_optout).toBe('1')
   const before = (await log(page, run)).requests
   await start(page, run, init)
   await page.evaluate(() => window.datacub.track('after_reload'))
