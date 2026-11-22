@@ -1,8 +1,8 @@
 name: Release
 
 # On every push to main:
-# 1. release-please keeps a release pull request open (version bump + CHANGELOG from conventional
-#    commits). Merging it tags the version and creates the GitHub release.
+# 1. release-please opens a release pull request (version bump + CHANGELOG from conventional
+#    commits) and merges it at once, which tags the version and creates the GitHub release.
 # 2. If npm lacks package.json's version, build re-runs every check and packs the tarball, and
 #    publish uploads it with provenance (no dependency code runs with publish rights), then installs
 #    it from npm to verify.
@@ -26,7 +26,17 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      # No waiting on a person: merge the release PR, then run release-please again to tag and release.
+      # (A merge made with GITHUB_TOKEN starts no new workflow run, so this run carries on to publish.)
+      - if: steps.rp.outputs.prs_created == 'true'
+        run: gh pr merge "$(echo "$PR" | jq -r .number)" --squash --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.rp.outputs.pr }}
+      - if: steps.rp.outputs.prs_created == 'true'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
 
   build:
     needs: release-please
@@ -41,6 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main # includes a release PR merged above
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:

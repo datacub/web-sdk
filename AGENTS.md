@@ -17,4 +17,4 @@ Rules:
 - Don't break the public API or the wire format the ingestion server accepts. Keep the core under its size budget (`scripts/build.ts`).
 - Never collect form values, passwords, card numbers, national IDs or tokens, and no fingerprinting. Consent, revoke and Global Privacy Control must keep working.
 - A change to SDK output ships as a new version; never republish a version.
-- Use conventional commit titles (`fix: …`, `feat: …`, `chore: …`). release-please turns them into the release PR (version and CHANGELOG). Merging that PR tags the version and publishes it to npm with provenance. Nothing is published by hand.
+- Use conventional commit titles (`fix: …`, `feat: …`, `chore: …`). `fix` and `feat` release automatically: release-please bumps the version and CHANGELOG, merges its own release PR, and the workflow publishes to npm with provenance. `chore` releases nothing. Nothing is published by hand.
