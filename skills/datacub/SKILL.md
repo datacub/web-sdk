@@ -13,8 +13,10 @@ Current versions: `@datacub/web` 0.4.0 <!-- x-release-please-version -->, `@data
 ## 1. Get the project key
 
 You need a public project key: `pk_live_…` (production) or `pk_test_…` (the only kind accepted from
-`localhost`). Use the key from the prompt, or an existing `DATACUB_KEY` env var. If there is none,
-ask for it: it is in datacub under **Settings → Integrations**. Public keys only send events, so they
+`localhost`). Use the key from the prompt or the project's env. If there is none, ask for it: it is
+in datacub under **Settings → Integrations**. Put it in a client-visible env var with the
+framework's public prefix (`VITE_DATACUB_KEY`, `NEXT_PUBLIC_DATACUB_KEY`, `EXPO_PUBLIC_DATACUB_KEY`)
+or straight in code. Public keys only send events, so they
 are safe in client code. Never put any other datacub credential (`rk_…`, `datacub_mcp_…`, `sk_…`) in
 code.
 
@@ -56,7 +58,9 @@ import datacub from '@datacub/web'
 import { useEffect } from 'react'
 
 export function Datacub() {
-  useEffect(() => datacub.init(process.env.NEXT_PUBLIC_DATACUB_KEY!), [])
+  useEffect(() => {
+    datacub.init(process.env.NEXT_PUBLIC_DATACUB_KEY!)
+  }, [])
   return null
 }
 // app/layout.tsx: render <Datacub /> inside <body>
@@ -81,7 +85,7 @@ npx expo install @datacub/react-native@next @react-native-async-storage/async-st
 
 Bare React Native: install `@datacub/react-native@next` and `@react-native-async-storage/async-storage`.
 
-Once at startup (`App.tsx`, or Expo Router's root `app/_layout.tsx`):
+Once at startup, at module scope (top level of `App.tsx`, or of Expo Router's root `app/_layout.tsx`):
 
 ```ts
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -95,8 +99,8 @@ Bare app without `expo-application`: `app: { applicationId: 'com.example.app', n
 
 Screens are not automatic. React Navigation: `onReady={() => trackNavigation(ref)}` on the
 `NavigationContainer`, with `trackNavigation` from `@datacub/react-native/navigation`. Expo Router,
-in the root layout: `const segments = useSegments()` and
-`useEffect(() => datacub.screen(segments.join('/') || 'index'), [segments])`. Send route names,
+in the root layout component: `const segments = useSegments()` and
+`useEffect(() => { datacub.screen(segments.join('/') || 'index') }, [segments])`. Send route names,
 never values a screen shows.
 
 The app's bundle ID or package name must be in the project's allowed apps (datacub, **Settings → General**).
@@ -118,7 +122,7 @@ app's own stable user ID (never an email or phone as the ID). On logout: `datacu
 
 From the code, pick the actions that show the product working for someone: `signup_completed`,
 `project_created`, `checkout_completed`, `subscription_started`, `teammate_invited`. Name them
-`object_action` in snake case. Track them where the code knows the action succeeded (after the API
+`object_action` in snake case. If the app has no login or no such actions yet, skip that part and say so. Track them where the code knows the action succeeded (after the API
 call resolves), once per outcome, never in code that re-runs on render:
 
 ```ts
@@ -130,10 +134,11 @@ Iqama IDs, emails, phone numbers, names or free text in events (the SDK redacts 
 
 ## 7. Verify
 
-Run the type checker and the build. Then run the app, open a page or screen and do one tracked
+Run the type checker and the build (report errors that were there before you started; don't fix them). Then run the app, open a page or screen and do one tracked
 action. Each must reach datacub:
 
-- Web: the `POST …/v1/batch` request answers `200` with `"accepted"` of 1 or more. A `403` names the
+- Web: each `POST …/v1/batch` request answers `200` with `"accepted"` of 1 or more (a batch can hold
+  several events, the page view and your custom event together). A `403` names the
   reason: `origin_not_allowed` (add the domain in Settings) or `localhost_live_key` (use `pk_test_`
   on localhost). Wait 5 seconds before closing the page; events go in small batches. Headless
   browsers count as bots: their events are stored but left out of reports, so check the response.
