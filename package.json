@@ -56,8 +56,8 @@
     "pack:check": "bun scripts/pack-check.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.2",
-    "@playwright/test": "1.64.1",
+    "@biomejs/biome": "2.6.8",
+    "@playwright/test": "1.65.1",
     "@tanstack/react-router": "1.170.46",
     "@types/bun": "1.4.4",
     "@types/react": "19.3.0",
@@ -65,8 +65,8 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "typescript": "7.0.2",
-    "vue": "3.5.44",
-    "vue-router": "4.6.4"
+    "vue": "3.5.45",
+    "vue-router": "5.5.1"
   },
   "author": "datacub (https://datacub.to)"
 }
