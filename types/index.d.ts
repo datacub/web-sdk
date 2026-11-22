@@ -1,4 +1,4 @@
-export declare const VERSION = "0.3.1";
+export declare const VERSION = "0.4.0";
 export type Property = string | number | boolean | null | Date | Property[] | {
     [key: string]: Property;
 };

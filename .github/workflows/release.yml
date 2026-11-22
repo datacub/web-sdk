@@ -1,13 +1,11 @@
 name: Release
 
-# Every push to main runs this. With pending changesets, it opens or updates the release pull
-# request. Without them, it publishes package.json's version if npm does not have it yet (the merged
-# release pull request), and creates the git tag and GitHub release if they are missing. A commit
-# that does not change the version publishes nothing.
-#
-# The jobs are split so that no job holding publish rights runs dependency code: `build` installs
-# and runs the toolchain with read-only permissions and hands over the packed tarball; `publish`
-# only uploads that file.
+# On every push to main:
+# 1. release-please keeps a release pull request open (version bump + CHANGELOG from conventional
+#    commits). Merging it tags the version and creates the GitHub release.
+# 2. If npm lacks package.json's version, build re-runs every check and packs the tarball, and
+#    publish uploads it with provenance (no dependency code runs with publish rights), then installs
+#    it from npm to verify.
 
 on:
   push:
@@ -21,53 +19,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  version:
-    name: Release pull request
-    if: github.ref == 'refs/heads/main'
+  release-please:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
-      contents: write # the release branch
-      pull-requests: write # the release pull request
-      actions: write # start CI on the release pull request
-    outputs:
-      pending: ${{ steps.changesets.outputs.has-changesets }}
+      contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
-      - run: bun install --frozen-lockfile --ignore-scripts
-      - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
-        id: changesets
-        with:
-          version-script: bun run version
-          commit-message: "chore: release"
-          pr-title: "chore: release"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Commits pushed with GITHUB_TOKEN start no workflows, so CI is started explicitly.
-      - name: Run CI on the release pull request
-        if: steps.changesets.outputs.has-changesets == 'true'
-        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref changeset-release/main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
 
   build:
-    name: Build package
-    needs: version
-    if: needs.version.outputs.pending == 'false'
+    needs: release-please
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     outputs:
+      name: ${{ steps.state.outputs.name }}
       version: ${{ steps.state.outputs.version }}
       publish: ${{ steps.state.outputs.publish }}
-      release: ${{ steps.state.outputs.release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -78,26 +48,20 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-      - name: What is missing
-        id: state
+      - id: state
         run: |
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then publish=false; else publish=true; fi
-          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then release=false; else release=true; fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
-          echo "release=$release" >> "$GITHUB_OUTPUT"
-          echo "$name@$version: publish=$publish release=$release"
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - if: steps.state.outputs.publish == 'true' || steps.state.outputs.release == 'true'
-        run: bun install --frozen-lockfile --ignore-scripts
-      # The same checks as CI, so an unverified commit is never published.
+          echo "$name@$version publish=$publish"
       - if: steps.state.outputs.publish == 'true'
-        run: bun run lint && bun run typecheck && bun run test && bun run pack:check
-      - if: steps.state.outputs.publish == 'true'
-        run: mv "$(npm pack --ignore-scripts --silent | tail -1)" package.tgz
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run lint && bun run typecheck && bun run test && bun run pack:check
+          mv "$(npm pack --ignore-scripts --silent | tail -1)" package.tgz
       - if: steps.state.outputs.publish == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -106,47 +70,36 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish
     needs: build
-    if: needs.build.outputs.publish == 'true' || needs.build.outputs.release == 'true'
+    if: needs.build.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Only the npm environment can publish: it is limited to main, and npm trusts only this
-    # repository, this workflow file and this environment.
     environment: npm
     permissions:
-      contents: write # the git tag and GitHub release
-      id-token: write # npm trusted publishing (OIDC) and provenance
+      contents: read
+      id-token: write # npm trusted publishing and provenance
     env:
+      NAME: ${{ needs.build.outputs.name }}
       VERSION: ${{ needs.build.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - if: needs.build.outputs.publish == 'true'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: package
-      - name: Publish to npm
-        if: needs.build.outputs.publish == 'true'
+      - name: Publish
         run: |
-          # Trusted publishing needs npm 11.5.1 or later.
           npm install -g npm@12.2.3
           case "$VERSION" in *-*) tag=next ;; *) tag=latest ;; esac
           npm publish ./package.tgz --provenance --access public --tag "$tag"
         env:
-          # Bootstrap only: npm can trust a workflow only once the package exists, so the very first
-          # version is published with a short-lived token. Removed after the first release.
+          # Only until npm trusted publishing is set up for the package; then delete the secret.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Tag and GitHub release
-        if: needs.build.outputs.release == 'true'
+      - name: Verify the published package installs
         run: |
-          awk -v v="## $VERSION" '$0 == v { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > notes.md
-          case "$VERSION" in *-*) pre=--prerelease ;; *) pre= ;; esac
-          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$VERSION" --notes-file notes.md $pre
-        env:
-          GH_TOKEN: ${{ github.token }}
+          for i in 1 2 3 4 5 6; do npm view "$NAME@$VERSION" version && break; sleep 10; done
+          cd "$(mktemp -d)" && npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit "$NAME@$VERSION"
+          npm audit signatures

@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Report a security vulnerability
-    url: https://github.com/datacub/web-sdk/security/advisories/new
-    about: Please report security problems privately, never in a public issue.
-  - name: Questions about your datacub account or data
-    url: mailto:support@datacub.to
-    about: Account, billing and data questions go to datacub support.

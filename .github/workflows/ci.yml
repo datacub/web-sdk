@@ -4,8 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  # The release workflow dispatches this on the release pull request, whose commits are pushed with
-  # GITHUB_TOKEN and so do not trigger pull_request runs on their own.
   workflow_dispatch:
 
 permissions:
@@ -85,3 +83,22 @@ jobs:
         with:
           fail-on-severity: moderate
           comment-summary-in-pr: on-failure
+
+  # Dependabot's non-major updates merge themselves once every check above passes.
+  automerge:
+    name: Merge Dependabot update
+    needs: [check, browser, secrets, dependency-review]
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      - if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge "$PR" --squash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.html_url }}

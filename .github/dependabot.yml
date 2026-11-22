@@ -1,9 +1,12 @@
+# Weekly updates; CI merges non-major ones by itself once every check passes (ci.yml, automerge).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
     groups:
       actions:
         patterns: ["*"]
@@ -11,6 +14,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
     groups:
       dev-dependencies:
         dependency-type: development

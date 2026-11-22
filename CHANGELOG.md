@@ -1,4 +1,9 @@
-# @datacub/web
+# Changelog
+
+## 0.4.0
+
+- `datacub.identify({ id, ...traits })` works: the id can be `id`, `userId` or `user_id`, and `fullName` and `phoneNumber` count as `name` and `phone`.
+- Visitor cookies are per project key (`datacub_id_<key part>` and so on; `datacub_optout` stays shared), so existing visitors get a new anon_id once.
 
 ## 0.3.1
 
