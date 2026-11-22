@@ -1,4 +1,4 @@
-# Weekly updates; CI merges non-major ones by itself once every check passes (ci.yml, automerge).
+# Weekly updates; CI merges them by itself once every check passes (ci.yml, automerge).
 version: 2
 updates:
   - package-ecosystem: github-actions
