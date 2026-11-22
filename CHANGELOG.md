@@ -1,5 +1,11 @@
 # @datacub/web
 
+## 0.4.0
+
+### Minor Changes
+
+- [#3](https://github.com/datacub/web-sdk/pull/3) [`87b1119`](https://github.com/datacub/web-sdk/commit/87b1119c4ef1c2b29b6b98495d2a7b50ff7e3e80) Thanks [@0ss](https://github.com/0ss)! - `datacub.identify({ id, ...traits })` now works: the id can be `id`, `userId` or `user_id`, and `fullName` and `phoneNumber` count as `name` and `phone`. Visitor cookies are now per project key (`datacub_id_<first 8 key characters>` and so on; `datacub_optout` stays shared), so existing visitors get a new anon_id once.
+
 ## 0.3.1
 
 First release on npm.
